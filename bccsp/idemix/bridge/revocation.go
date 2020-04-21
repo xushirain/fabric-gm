@@ -6,15 +6,13 @@ SPDX-License-Identifier: Apache-2.0
 package bridge
 
 import (
-	//"crypto/ecdsa"
+	// "crypto/ecdsa"
 
-	//"crypto/ecdsa"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-amcl/amcl/FP256BN"
 	"github.com/hyperledger/fabric/bccsp"
 	cryptolib "github.com/hyperledger/fabric/idemix"
 	"github.com/pkg/errors"
-
 	"github.com/tjfoc/gmsm/sm2"
 )
 

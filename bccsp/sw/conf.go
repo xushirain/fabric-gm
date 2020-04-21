@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"hash"
 
+	"github.com/tjfoc/gmsm/sm3"
+
 	"golang.org/x/crypto/sha3"
 )
 
@@ -72,6 +74,24 @@ func (conf *config) setSecurityLevelSHA3(level int) (err error) {
 	case 384:
 		conf.ellipticCurve = elliptic.P384()
 		conf.hashFunction = sha3.New384
+		conf.rsaBitLength = 3072
+		conf.aesBitLength = 32
+	default:
+		err = fmt.Errorf("Security level not supported [%d]", level)
+	}
+	return
+}
+
+func (conf *config) setSecurityLevelGMSM3(level int) (err error) {
+	switch level {
+	case 256:
+		conf.ellipticCurve = elliptic.P256()
+		conf.hashFunction = sm3.New
+		conf.rsaBitLength = 2048
+		conf.aesBitLength = 32
+	case 384:
+		conf.ellipticCurve = elliptic.P384()
+		conf.hashFunction = sm3.New
 		conf.rsaBitLength = 3072
 		conf.aesBitLength = 32
 	default:

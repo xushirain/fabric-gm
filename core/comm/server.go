@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package comm
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -16,7 +14,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/tjfoc/gmsm/sm2"
+	tls "github.com/tjfoc/gmtls"
+
 	"google.golang.org/grpc"
 )
 
@@ -36,7 +37,8 @@ type GRPCServer struct {
 	lock *sync.Mutex
 	// Set of PEM-encoded X509 certificate authorities used to populate
 	// the tlsConfig.ClientCAs indexed by subject
-	clientRootCAs map[string]*x509.Certificate
+	// clientRootCAs map[string]*x509.Certificate
+	clientRootCAs map[string]*sm2.Certificate
 	// TLS configuration used by the grpc server
 	tlsConfig *tls.Config
 }
@@ -112,8 +114,10 @@ func NewGRPCServerFromListener(listener net.Listener, serverConfig ServerConfig)
 				grpcServer.tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 				//if we have client root CAs, create a certPool
 				if len(secureConfig.ClientRootCAs) > 0 {
-					grpcServer.clientRootCAs = make(map[string]*x509.Certificate)
-					grpcServer.tlsConfig.ClientCAs = x509.NewCertPool()
+					// grpcServer.clientRootCAs = make(map[string]*x509.Certificate)
+					// grpcServer.tlsConfig.ClientCAs = x509.NewCertPool()
+					grpcServer.clientRootCAs = make(map[string]*sm2.Certificate)
+					grpcServer.tlsConfig.ClientCAs = sm2.NewCertPool()
 					for _, clientRootCA := range secureConfig.ClientRootCAs {
 						err = grpcServer.appendClientRootCA(clientRootCA)
 						if err != nil {
@@ -265,7 +269,8 @@ func (gServer *GRPCServer) RemoveClientRootCAs(clientRoots [][]byte) error {
 	}
 
 	//create a new CertPool and populate with current clientRootCAs
-	certPool := x509.NewCertPool()
+	// certPool := x509.NewCertPool()
+	certPool := sm2.NewCertPool()
 	for _, clientRoot := range gServer.clientRootCAs {
 		certPool.AddCert(clientRoot)
 	}
@@ -308,7 +313,8 @@ func (gServer *GRPCServer) SetClientRootCAs(clientRoots [][]byte) error {
 	errMsg := "Failed to set client root certificate(s): %s"
 
 	//create a new map and CertPool
-	clientRootCAs := make(map[string]*x509.Certificate)
+	// clientRootCAs := make(map[string]*x509.Certificate)
+	clientRootCAs := make(map[string]*sm2.Certificate)
 	for _, clientRoot := range clientRoots {
 		certs, subjects, err := pemToX509Certs(clientRoot)
 		if err != nil {
@@ -323,7 +329,8 @@ func (gServer *GRPCServer) SetClientRootCAs(clientRoots [][]byte) error {
 	}
 
 	//create a new CertPool and populate with the new clientRootCAs
-	certPool := x509.NewCertPool()
+	// certPool := x509.NewCertPool()
+	certPool := sm2.NewCertPool()
 	for _, clientRoot := range clientRootCAs {
 		certPool.AddCert(clientRoot)
 	}

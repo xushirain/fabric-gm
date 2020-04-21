@@ -8,11 +8,13 @@ package comm
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"time"
 
+	tls "github.com/tjfoc/gmtls"
+
 	"github.com/pkg/errors"
+	"github.com/tjfoc/gmsm/sm2"
+	credentials "github.com/tjfoc/gmtls/gmcredentials"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -59,7 +61,6 @@ func NewGRPCClient(config ClientConfig) (*GRPCClient, error) {
 	// Unless asynchronous connect is set, make connection establishment blocking.
 	if !config.AsyncConnect {
 		client.dialOpts = append(client.dialOpts, grpc.WithBlock())
-		client.dialOpts = append(client.dialOpts, grpc.FailOnNonTempDialError(true))
 	}
 	client.timeout = config.Timeout
 	// set send/recv message size to package defaults
@@ -78,7 +79,7 @@ func (client *GRPCClient) parseSecureOptions(opts *SecureOptions) error {
 		VerifyPeerCertificate: opts.VerifyCertificate,
 		MinVersion:            tls.VersionTLS12} // TLS 1.2 only
 	if len(opts.ServerRootCAs) > 0 {
-		client.tlsConfig.RootCAs = x509.NewCertPool()
+		client.tlsConfig.RootCAs = sm2.NewCertPool()
 		for _, certBytes := range opts.ServerRootCAs {
 			err := AddPemToCertPool(certBytes, client.tlsConfig.RootCAs)
 			if err != nil {
@@ -105,13 +106,6 @@ func (client *GRPCClient) parseSecureOptions(opts *SecureOptions) error {
 				"are required when using mutual TLS")
 		}
 	}
-
-	if opts.TimeShift > 0 {
-		client.tlsConfig.Time = func() time.Time {
-			return time.Now().Add((-1) * opts.TimeShift)
-		}
-	}
-
 	return nil
 }
 
@@ -149,12 +143,12 @@ func (client *GRPCClient) SetMaxSendMsgSize(size int) {
 }
 
 // SetServerRootCAs sets the list of authorities used to verify server
-// certificates based on a list of PEM-encoded X509 certificate authorities
+// certificates based on a list of PEM-encoded sm2 certificate authorities
 func (client *GRPCClient) SetServerRootCAs(serverRoots [][]byte) error {
 
 	// NOTE: if no serverRoots are specified, the current cert pool will be
 	// replaced with an empty one
-	certPool := x509.NewCertPool()
+	certPool := sm2.NewCertPool()
 	for _, root := range serverRoots {
 		err := AddPemToCertPool(root, certPool)
 		if err != nil {
@@ -165,13 +159,12 @@ func (client *GRPCClient) SetServerRootCAs(serverRoots [][]byte) error {
 	return nil
 }
 
-// TLSOption changes the given TLS config
 type TLSOption func(tlsConfig *tls.Config)
 
 // NewConnection returns a grpc.ClientConn for the target address and
 // overrides the server name used to verify the hostname on the
 // certificate returned by a server when using TLS
-func (client *GRPCClient) NewConnection(address string, serverNameOverride string, tlsOptions ...TLSOption) (
+func (client *GRPCClient) NewConnection(address string, serverNameOverride string) (
 	*grpc.ClientConn, error) {
 
 	var dialOpts []grpc.DialOption
@@ -185,7 +178,7 @@ func (client *GRPCClient) NewConnection(address string, serverNameOverride strin
 		client.tlsConfig.ServerName = serverNameOverride
 		dialOpts = append(dialOpts,
 			grpc.WithTransportCredentials(
-				&DynamicClientCredentials{TLSConfig: client.tlsConfig, TLSOptions: tlsOptions}))
+				credentials.NewTLS(client.tlsConfig)))
 	} else {
 		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}

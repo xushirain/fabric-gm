@@ -20,11 +20,12 @@ SPDX-License-Identifier: Apache-2.0
 package peer
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"path/filepath"
+
+	tls "github.com/tjfoc/gmtls"
 
 	"github.com/hyperledger/fabric/core/comm"
 	"github.com/hyperledger/fabric/core/config"
@@ -129,10 +130,7 @@ func GetServerConfig() (comm.ServerConfig, error) {
 	secureOptions := &comm.SecureOptions{
 		UseTLS: viper.GetBool("peer.tls.enabled"),
 	}
-	serverConfig := comm.ServerConfig{
-		ConnectionTimeout: viper.GetDuration("peer.connectiontimeout"),
-		SecOpts:           secureOptions,
-	}
+	serverConfig := comm.ServerConfig{SecOpts: secureOptions}
 	if secureOptions.UseTLS {
 		// get the certs from the file system
 		serverKey, err := ioutil.ReadFile(config.GetPath("peer.tls.key.file"))

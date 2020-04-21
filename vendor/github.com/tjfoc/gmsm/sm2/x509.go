@@ -441,11 +441,10 @@ var (
 	oidSignatureSM2WithSHA256   = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 503}
 	//	oidSignatureSM3WithRSA      = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 504}
 
-	oidSM3     = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 401, 1}
-	oidSHA256  = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
-	oidSHA384  = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 2}
-	oidSHA512  = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 3}
-	oidHashSM3 = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 401}
+	oidSM3    = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 401, 1}
+	oidSHA256 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
+	oidSHA384 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 2}
+	oidSHA512 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 3}
 
 	oidMGF1 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 8}
 
@@ -970,18 +969,24 @@ func (c *Certificate) CheckSignature(algo SignatureAlgorithm, signed, signature 
 // a crypto.PublicKey.
 func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey crypto.PublicKey) (err error) {
 	var hashType Hash
+
 	switch algo {
 	case SHA1WithRSA, DSAWithSHA1, ECDSAWithSHA1, SM2WithSHA1:
+		fmt.Println("SHA1")
 		hashType = SHA1
 	case SHA256WithRSA, SHA256WithRSAPSS, DSAWithSHA256, ECDSAWithSHA256, SM2WithSHA256:
+		fmt.Println("SHA256")
 		hashType = SHA256
 	case SHA384WithRSA, SHA384WithRSAPSS, ECDSAWithSHA384:
+		fmt.Println("SHA384")
 		hashType = SHA384
 	case SHA512WithRSA, SHA512WithRSAPSS, ECDSAWithSHA512:
+		fmt.Println("SHA512")
 		hashType = SHA512
 	case MD2WithRSA, MD5WithRSA:
 		return InsecureAlgorithmError(algo)
 	case SM2WithSM3: // SM3WithRSA reserve
+		fmt.Println("SM3")
 		hashType = SM3
 	default:
 		return ErrUnsupportedAlgorithm
@@ -990,17 +995,17 @@ func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey
 	if !hashType.Available() {
 		return ErrUnsupportedAlgorithm
 	}
-	fnHash := func() []byte {
-		h := hashType.New()
-		h.Write(signed)
-		return h.Sum(nil)
-	}
+	h := hashType.New()
+
+	h.Write(signed)
+	digest := h.Sum(nil)
+
 	switch pub := publicKey.(type) {
 	case *rsa.PublicKey:
 		if algo.isRSAPSS() {
-			return rsa.VerifyPSS(pub, crypto.Hash(hashType), fnHash(), signature, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash})
+			return rsa.VerifyPSS(pub, crypto.Hash(hashType), digest, signature, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash})
 		} else {
-			return rsa.VerifyPKCS1v15(pub, crypto.Hash(hashType), fnHash(), signature)
+			return rsa.VerifyPKCS1v15(pub, crypto.Hash(hashType), digest, signature)
 		}
 	case *dsa.PublicKey:
 		dsaSig := new(dsaSignature)
@@ -1012,7 +1017,7 @@ func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey
 		if dsaSig.R.Sign() <= 0 || dsaSig.S.Sign() <= 0 {
 			return errors.New("x509: DSA signature contained zero or negative values")
 		}
-		if !dsa.Verify(pub, fnHash(), dsaSig.R, dsaSig.S) {
+		if !dsa.Verify(pub, digest, dsaSig.R, dsaSig.S) {
 			return errors.New("x509: DSA verification failure")
 		}
 		return
@@ -1028,17 +1033,37 @@ func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey
 		}
 		switch pub.Curve {
 		case P256Sm2():
-			sm2pub := &PublicKey{
+			if !Verify(&PublicKey{
 				Curve: pub.Curve,
 				X:     pub.X,
 				Y:     pub.Y,
-			}
-			if !Sm2Verify(sm2pub, signed, nil, ecdsaSig.R, ecdsaSig.S) {
+			}, digest, ecdsaSig.R, ecdsaSig.S) {
 				return errors.New("x509: SM2 verification failure")
 			}
 		default:
-			if !ecdsa.Verify(pub, fnHash(), ecdsaSig.R, ecdsaSig.S) {
+			if !ecdsa.Verify(pub, digest, ecdsaSig.R, ecdsaSig.S) {
 				return errors.New("x509: ECDSA verification failure")
+			}
+		}
+		return
+	case *PublicKey:
+		ecdsaSig := new(ecdsaSignature)
+		if rest, err := asn1.Unmarshal(signature, ecdsaSig); err != nil {
+			return err
+		} else if len(rest) != 0 {
+			return errors.New("x509: trailing data after ECDSA signature")
+		}
+		if ecdsaSig.R.Sign() <= 0 || ecdsaSig.S.Sign() <= 0 {
+			return errors.New("x509: ECDSA signature contained zero or negative values")
+		}
+		switch pub.Curve {
+		case P256Sm2():
+			if !Verify(&PublicKey{
+				Curve: pub.Curve,
+				X:     pub.X,
+				Y:     pub.Y,
+			}, digest, ecdsaSig.R, ecdsaSig.S) {
+				return errors.New("x509: SM2 verification failure")
 			}
 		}
 		return
@@ -1179,7 +1204,8 @@ func parsePublicKey(algo PublicKeyAlgorithm, keyData *publicKeyInfo) (interface{
 		if x == nil {
 			return nil, errors.New("x509: failed to unmarshal elliptic curve point")
 		}
-		pub := &ecdsa.PublicKey{
+
+		pub := &PublicKey{
 			Curve: namedCurve,
 			X:     x,
 			Y:     y,
@@ -1957,15 +1983,9 @@ func CreateCertificate(rand io.Reader, template, parent *Certificate, pub, priv 
 
 	c.Raw = tbsCertContents
 
-	digest := tbsCertContents
-	switch template.SignatureAlgorithm {
-	case SM2WithSM3, SM2WithSHA1, SM2WithSHA256:
-		break
-	default:
-		h := hashFunc.New()
-		h.Write(tbsCertContents)
-		digest = h.Sum(nil)
-	}
+	h := hashFunc.New()
+	h.Write(tbsCertContents)
+	digest := h.Sum(nil)
 
 	var signerOpts crypto.SignerOpts
 	signerOpts = hashFunc
@@ -1981,6 +2001,7 @@ func CreateCertificate(rand io.Reader, template, parent *Certificate, pub, priv 
 	if err != nil {
 		return
 	}
+
 	return asn1.Marshal(certificate{
 		nil,
 		c,
@@ -2066,15 +2087,9 @@ func (c *Certificate) CreateCRL(rand io.Reader, priv interface{}, revokedCerts [
 		return
 	}
 
-	digest := tbsCertListContents
-	switch hashFunc {
-	case SM3:
-		break
-	default:
-		h := hashFunc.New()
-		h.Write(tbsCertListContents)
-		digest = h.Sum(nil)
-	}
+	h := hashFunc.New()
+	h.Write(tbsCertListContents)
+	digest := h.Sum(nil)
 
 	var signature []byte
 	signature, err = key.Sign(rand, digest, hashFunc)
@@ -2351,15 +2366,9 @@ func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv
 	}
 	tbsCSR.Raw = tbsCSRContents
 
-	digest := tbsCSRContents
-	switch template.SignatureAlgorithm {
-	case SM2WithSM3, SM2WithSHA1, SM2WithSHA256:
-		break
-	default:
-		h := hashFunc.New()
-		h.Write(tbsCSRContents)
-		digest = h.Sum(nil)
-	}
+	h := hashFunc.New()
+	h.Write(tbsCSRContents)
+	digest := h.Sum(nil)
 
 	var signature []byte
 	signature, err = key.Sign(rand, digest, hashFunc)

@@ -8,8 +8,8 @@ package common
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
+	tls "github.com/tjfoc/gmtls"
 	"io/ioutil"
 	"time"
 
@@ -115,7 +115,7 @@ func (pc *PeerClient) Deliver() (pb.Deliver_DeliverClient, error) {
 
 // PeerDeliver returns a client for the Deliver service for peer-specific use
 // cases (i.e. DeliverFiltered)
-func (pc *PeerClient) PeerDeliver() (api.PeerDeliverClient, error) {
+func (pc *PeerClient) PeerDeliver() (*PeerDeliverClient, error) {
 	conn, err := pc.commonClient.NewConnection(pc.address, pc.sn)
 	if err != nil {
 		return nil, errors.WithMessage(err, fmt.Sprintf("deliver client failed to connect to %s", pc.address))
