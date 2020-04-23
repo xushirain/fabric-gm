@@ -63,13 +63,13 @@ func (c *Consumer) ConsumePartition(topic string, partition int32, offset int64)
 	return pc, nil
 }
 
-// Topics returns a list of topics, as registered with SetTopicMetadata
+// Topics returns a list of topics, as registered with SetMetadata
 func (c *Consumer) Topics() ([]string, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if c.metadata == nil {
-		c.t.Errorf("Unexpected call to Topics. Initialize the mock's topic metadata with SetTopicMetadata.")
+		c.t.Errorf("Unexpected call to Topics. Initialize the mock's topic metadata with SetMetadata.")
 		return nil, sarama.ErrOutOfBrokers
 	}
 
@@ -80,13 +80,13 @@ func (c *Consumer) Topics() ([]string, error) {
 	return result, nil
 }
 
-// Partitions returns the list of parititons for the given topic, as registered with SetTopicMetadata
+// Partitions returns the list of parititons for the given topic, as registered with SetMetadata
 func (c *Consumer) Partitions(topic string) ([]int32, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if c.metadata == nil {
-		c.t.Errorf("Unexpected call to Partitions. Initialize the mock's topic metadata with SetTopicMetadata.")
+		c.t.Errorf("Unexpected call to Partitions. Initialize the mock's topic metadata with SetMetadata.")
 		return nil, sarama.ErrOutOfBrokers
 	}
 	if c.metadata[topic] == nil {

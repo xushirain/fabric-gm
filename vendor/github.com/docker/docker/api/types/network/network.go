@@ -13,7 +13,7 @@ type Address struct {
 // IPAM represents IP Address Management
 type IPAM struct {
 	Driver  string
-	Options map[string]string // Per network IPAM driver options
+	Options map[string]string //Per network IPAM driver options
 	Config  []IPAMConfig
 }
 
@@ -112,13 +112,12 @@ type ConfigReference struct {
 }
 
 var acceptedFilters = map[string]bool{
-	"dangling": true,
-	"driver":   true,
-	"id":       true,
-	"label":    true,
-	"name":     true,
-	"scope":    true,
-	"type":     true,
+	"driver": true,
+	"type":   true,
+	"name":   true,
+	"id":     true,
+	"label":  true,
+	"scope":  true,
 }
 
 // ValidateFilters validates the list of filter args with the available filters.

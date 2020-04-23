@@ -33,7 +33,7 @@ func NewAsyncProducer(t ErrorReporter, config *sarama.Config) *AsyncProducer {
 	}
 	mp := &AsyncProducer{
 		t:            t,
-		closed:       make(chan struct{}),
+		closed:       make(chan struct{}, 0),
 		expectations: make([]*producerExpectation, 0),
 		input:        make(chan *sarama.ProducerMessage, config.ChannelBufferSize),
 		successes:    make(chan *sarama.ProducerMessage, config.ChannelBufferSize),

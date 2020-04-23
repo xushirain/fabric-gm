@@ -9,16 +9,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"strings"
 )
 
 // ErrCannotParseDockercfg is the error returned by NewAuthConfigurations when the dockercfg cannot be parsed.
-var ErrCannotParseDockercfg = errors.New("failed to read authentication from dockercfg")
+var ErrCannotParseDockercfg = errors.New("Failed to read authentication from dockercfg")
 
 // AuthConfiguration represents authentication options to use in the PushImage
 // method. It represents the authentication in the Docker index server.
@@ -29,20 +29,12 @@ type AuthConfiguration struct {
 	ServerAddress string `json:"serveraddress,omitempty"`
 
 	// IdentityToken can be supplied with the identitytoken response of the AuthCheck call
-	// see https://pkg.go.dev/github.com/docker/docker/api/types?tab=doc#AuthConfig
+	// see https://godoc.org/github.com/docker/docker/api/types#AuthConfig
 	// It can be used in place of password not in conjunction with it
 	IdentityToken string `json:"identitytoken,omitempty"`
 
 	// RegistryToken can be supplied with the registrytoken
 	RegistryToken string `json:"registrytoken,omitempty"`
-}
-
-func (c AuthConfiguration) isEmpty() bool {
-	return c == AuthConfiguration{}
-}
-
-func (c AuthConfiguration) headerKey() string {
-	return "X-Registry-Auth"
 }
 
 // AuthConfigurations represents authentication options to use for the
@@ -51,25 +43,9 @@ type AuthConfigurations struct {
 	Configs map[string]AuthConfiguration `json:"configs"`
 }
 
-func (c AuthConfigurations) isEmpty() bool {
-	return len(c.Configs) == 0
-}
-
-func (c AuthConfigurations) headerKey() string {
-	return "X-Registry-Config"
-}
-
 // AuthConfigurations119 is used to serialize a set of AuthConfigurations
 // for Docker API >= 1.19.
 type AuthConfigurations119 map[string]AuthConfiguration
-
-func (c AuthConfigurations119) isEmpty() bool {
-	return len(c) == 0
-}
-
-func (c AuthConfigurations119) headerKey() string {
-	return "X-Registry-Config"
-}
 
 // dockerConfig represents a registry authentation configuration from the
 // .dockercfg file.
@@ -93,11 +69,9 @@ func NewAuthConfigurationsFromFile(path string) (*AuthConfigurations, error) {
 func cfgPaths(dockerConfigEnv string, homeEnv string) []string {
 	var paths []string
 	if dockerConfigEnv != "" {
-		paths = append(paths, path.Join(dockerConfigEnv, "plaintext-passwords.json"))
 		paths = append(paths, path.Join(dockerConfigEnv, "config.json"))
 	}
 	if homeEnv != "" {
-		paths = append(paths, path.Join(homeEnv, ".docker", "plaintext-passwords.json"))
 		paths = append(paths, path.Join(homeEnv, ".docker", "config.json"))
 		paths = append(paths, path.Join(homeEnv, ".dockercfg"))
 	}
@@ -110,13 +84,10 @@ func cfgPaths(dockerConfigEnv string, homeEnv string) []string {
 // - $HOME/.docker/config.json
 // - $HOME/.dockercfg
 func NewAuthConfigurationsFromDockerCfg() (*AuthConfigurations, error) {
-	pathsToTry := cfgPaths(os.Getenv("DOCKER_CONFIG"), os.Getenv("HOME"))
-	if len(pathsToTry) < 1 {
-		return nil, errors.New("no docker configuration found")
-	}
-
+	err := fmt.Errorf("No docker configuration found")
 	var auths *AuthConfigurations
-	var err error
+
+	pathsToTry := cfgPaths(os.Getenv("DOCKER_CONFIG"), os.Getenv("HOME"))
 	for _, path := range pathsToTry {
 		auths, err = NewAuthConfigurationsFromFile(path)
 		if err == nil {
@@ -172,14 +143,9 @@ func authConfigs(confs map[string]dockerConfig) (*AuthConfigurations, error) {
 		if conf.Auth == "" {
 			continue
 		}
-
-		// support both padded and unpadded encoding
 		data, err := base64.StdEncoding.DecodeString(conf.Auth)
 		if err != nil {
-			data, err = base64.StdEncoding.WithPadding(base64.NoPadding).DecodeString(conf.Auth)
-		}
-		if err != nil {
-			return nil, errors.New("error decoding plaintext credentials")
+			return nil, err
 		}
 
 		userpass := strings.SplitN(string(data), ":", 2)
@@ -227,7 +193,7 @@ func (c *Client) AuthCheck(conf *AuthConfiguration) (AuthStatus, error) {
 	if conf == nil {
 		return authStatus, errors.New("conf is nil")
 	}
-	resp, err := c.do(http.MethodPost, "/auth", doOptions{data: conf})
+	resp, err := c.do("POST", "/auth", doOptions{data: conf})
 	if err != nil {
 		return authStatus, err
 	}

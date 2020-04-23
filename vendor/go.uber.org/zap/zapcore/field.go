@@ -65,11 +65,8 @@ const (
 	Int8Type
 	// StringType indicates that the field carries a string.
 	StringType
-	// TimeType indicates that the field carries a time.Time that is
-	// representable by a UnixNano() stored as an int64.
+	// TimeType indicates that the field carries a time.Time.
 	TimeType
-	// TimeFullType indicates that the field carries a time.Time stored as-is.
-	TimeFullType
 	// Uint64Type indicates that the field carries a uint64.
 	Uint64Type
 	// Uint32Type indicates that the field carries a uint32.
@@ -148,8 +145,6 @@ func (f Field) AddTo(enc ObjectEncoder) {
 			// Fall back to UTC if location is nil.
 			enc.AddTime(f.Key, time.Unix(0, f.Integer))
 		}
-	case TimeFullType:
-		enc.AddTime(f.Key, f.Interface.(time.Time))
 	case Uint64Type:
 		enc.AddUint64(f.Key, uint64(f.Integer))
 	case Uint32Type:
@@ -165,7 +160,7 @@ func (f Field) AddTo(enc ObjectEncoder) {
 	case NamespaceType:
 		enc.OpenNamespace(f.Key)
 	case StringerType:
-		err = encodeStringer(f.Key, f.Interface, enc)
+		enc.AddString(f.Key, f.Interface.(fmt.Stringer).String())
 	case ErrorType:
 		encodeError(f.Key, f.Interface.(error), enc)
 	case SkipType:
@@ -203,15 +198,4 @@ func addFields(enc ObjectEncoder, fields []Field) {
 	for i := range fields {
 		fields[i].AddTo(enc)
 	}
-}
-
-func encodeStringer(key string, stringer interface{}, enc ObjectEncoder) (err error) {
-	defer func() {
-		if v := recover(); v != nil {
-			err = fmt.Errorf("PANIC=%v", v)
-		}
-	}()
-
-	enc.AddString(key, stringer.(fmt.Stringer).String())
-	return
 }

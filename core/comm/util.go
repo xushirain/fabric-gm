@@ -122,7 +122,7 @@ func noopBinding(_ context.Context, _ []byte) error {
 // ExtractCertificateHashFromContext extracts the hash of the certificate from the given context.
 // If the certificate isn't present, nil is returned
 func ExtractCertificateHashFromContext(ctx context.Context) []byte {
-	rawCert := ExtractCertificateFromContext(ctx)
+	rawCert := ExtractRawCertificateFromContext(ctx)
 	if len(rawCert) == 0 {
 		return nil
 	}
@@ -133,7 +133,7 @@ func ExtractCertificateHashFromContext(ctx context.Context) []byte {
 
 // ExtractCertificateFromContext returns the TLS certificate (if applicable)
 // from the given context of a gRPC stream
-func ExtractCertificateFromContext(ctx context.Context) []byte {
+func ExtractCertificateFromContext(ctx context.Context) *sm2.Certificate {
 	pr, extracted := peer.FromContext(ctx)
 	if !extracted {
 		return nil
@@ -152,7 +152,7 @@ func ExtractCertificateFromContext(ctx context.Context) []byte {
 	if len(certs) == 0 {
 		return nil
 	}
-	return certs[0].Raw
+	return certs[0]
 }
 
 // ExtractRawCertificateFromContext returns the raw TLS certificate (if applicable)
@@ -162,5 +162,5 @@ func ExtractRawCertificateFromContext(ctx context.Context) []byte {
 	if cert == nil {
 		return nil
 	}
-	return cert
+	return cert.Raw
 }

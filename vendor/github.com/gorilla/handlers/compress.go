@@ -12,8 +12,6 @@ import (
 	"strings"
 )
 
-const acceptEncoding string = "Accept-Encoding"
-
 type compressResponseWriter struct {
 	io.Writer
 	http.ResponseWriter
@@ -76,65 +74,73 @@ func CompressHandlerLevel(h http.Handler, level int) http.Handler {
 		level = gzip.DefaultCompression
 	}
 
-	const (
-		gzipEncoding  = "gzip"
-		flateEncoding = "deflate"
-	)
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// detect what encoding to use
-		var encoding string
-		for _, curEnc := range strings.Split(r.Header.Get(acceptEncoding), ",") {
-			curEnc = strings.TrimSpace(curEnc)
-			if curEnc == gzipEncoding || curEnc == flateEncoding {
-				encoding = curEnc
-				break
+	L:
+		for _, enc := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+			switch strings.TrimSpace(enc) {
+			case "gzip":
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Add("Vary", "Accept-Encoding")
+
+				gw, _ := gzip.NewWriterLevel(w, level)
+				defer gw.Close()
+
+				h, hok := w.(http.Hijacker)
+				if !hok { /* w is not Hijacker... oh well... */
+					h = nil
+				}
+
+				f, fok := w.(http.Flusher)
+				if !fok {
+					f = nil
+				}
+
+				cn, cnok := w.(http.CloseNotifier)
+				if !cnok {
+					cn = nil
+				}
+
+				w = &compressResponseWriter{
+					Writer:         gw,
+					ResponseWriter: w,
+					Hijacker:       h,
+					Flusher:        f,
+					CloseNotifier:  cn,
+				}
+
+				break L
+			case "deflate":
+				w.Header().Set("Content-Encoding", "deflate")
+				w.Header().Add("Vary", "Accept-Encoding")
+
+				fw, _ := flate.NewWriter(w, level)
+				defer fw.Close()
+
+				h, hok := w.(http.Hijacker)
+				if !hok { /* w is not Hijacker... oh well... */
+					h = nil
+				}
+
+				f, fok := w.(http.Flusher)
+				if !fok {
+					f = nil
+				}
+
+				cn, cnok := w.(http.CloseNotifier)
+				if !cnok {
+					cn = nil
+				}
+
+				w = &compressResponseWriter{
+					Writer:         fw,
+					ResponseWriter: w,
+					Hijacker:       h,
+					Flusher:        f,
+					CloseNotifier:  cn,
+				}
+
+				break L
 			}
-		}
-
-		// always add Accept-Encoding to Vary to prevent intermediate caches corruption
-		w.Header().Add("Vary", acceptEncoding)
-
-		// if we weren't able to identify an encoding we're familiar with, pass on the
-		// request to the handler and return
-		if encoding == "" {
-			h.ServeHTTP(w, r)
-			return
-		}
-
-		// wrap the ResponseWriter with the writer for the chosen encoding
-		var encWriter io.WriteCloser
-		if encoding == gzipEncoding {
-			encWriter, _ = gzip.NewWriterLevel(w, level)
-		} else if encoding == flateEncoding {
-			encWriter, _ = flate.NewWriter(w, level)
-		}
-		defer encWriter.Close()
-
-		w.Header().Set("Content-Encoding", encoding)
-		r.Header.Del(acceptEncoding)
-
-		hijacker, ok := w.(http.Hijacker)
-		if !ok { /* w is not Hijacker... oh well... */
-			hijacker = nil
-		}
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			flusher = nil
-		}
-
-		closeNotifier, ok := w.(http.CloseNotifier)
-		if !ok {
-			closeNotifier = nil
-		}
-
-		w = &compressResponseWriter{
-			Writer:         encWriter,
-			ResponseWriter: w,
-			Hijacker:       hijacker,
-			Flusher:        flusher,
-			CloseNotifier:  closeNotifier,
 		}
 
 		h.ServeHTTP(w, r)
